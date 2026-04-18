@@ -15,6 +15,7 @@ import {
   resolveDurationId,
 } from '../../common/utils/duration.util';
 import { PrismaService } from '../../database/prisma.service';
+import { toChatMessageResponse } from '../chat/chat.mapper';
 import { GroupsService } from '../groups/groups.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import type {
@@ -113,7 +114,30 @@ export class SharingService {
       session: this.toSessionResponse({ ...session, group: group! }),
     });
 
+    const sharer = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    await this.postSystemMessage(
+      dto.groupId,
+      `${sharer?.name ?? 'A member'} started sharing their location`,
+    );
+
     return this.toSessionResponse({ ...session, group: group! });
+  }
+
+  private async postSystemMessage(
+    groupId: string,
+    body: string,
+  ): Promise<void> {
+    const message = await this.prisma.chatMessage.create({
+      data: { groupId, type: 'SYSTEM', body },
+      include: { user: true },
+    });
+    this.realtimeGateway.broadcastChatMessage(
+      groupId,
+      toChatMessageResponse(message),
+    );
   }
 
   async updateDuration(

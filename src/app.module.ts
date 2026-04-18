@@ -10,6 +10,7 @@ import configuration from './config/configuration';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { HealthModule } from './modules/health/health.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -29,6 +30,7 @@ import { UsersModule } from './modules/users/users.module';
     HealthModule,
     GroupsModule,
     SharingModule,
+    ChatModule,
     RealtimeModule,
   ],
   providers: [

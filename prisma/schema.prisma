@@ -24,6 +24,12 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum ChatMessageType {
+  TEXT
+  LOCATION
+  SYSTEM
+}
+
 model User {
   id              String       @id @default(uuid()) @db.Uuid
   email           String       @unique @db.VarChar(320)
@@ -48,6 +54,7 @@ model User {
   receivedInvites         GroupInvite[]            @relation("InviteRecipient")
   sharingSessions         SharingSession[]
   sessionVisibility       SessionVisibility[]
+  chatMessages            ChatMessage[]
 
   @@index([deletedAt])
   @@map("users")
@@ -126,6 +133,7 @@ model Group {
   invites         GroupInvite[]
   activities      GroupActivity[]
   sharingSessions SharingSession[]
+  chatMessages    ChatMessage[]
 
   @@index([ownerId])
   @@index([deletedAt])
@@ -133,11 +141,12 @@ model Group {
 }
 
 model GroupMember {
-  id       String    @id @default(uuid()) @db.Uuid
-  groupId  String    @map("group_id") @db.Uuid
-  userId   String    @map("user_id") @db.Uuid
-  role     GroupRole @default(MEMBER)
-  joinedAt DateTime  @default(now()) @map("joined_at")
+  id         String    @id @default(uuid()) @db.Uuid
+  groupId    String    @map("group_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  role       GroupRole @default(MEMBER)
+  joinedAt   DateTime  @default(now()) @map("joined_at")
+  lastReadAt DateTime? @map("last_read_at")
 
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -223,4 +232,23 @@ model LocationUpdate {
 
   @@index([sessionId, createdAt])
   @@map("location_updates")
+}
+
+model ChatMessage {
+  id            String          @id @default(uuid()) @db.Uuid
+  groupId       String          @map("group_id") @db.Uuid
+  userId        String?         @map("user_id") @db.Uuid
+  type          ChatMessageType @default(TEXT)
+  body          String          @db.VarChar(2000)
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?         @map("location_label") @db.VarChar(200)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  deletedAt     DateTime?       @map("deleted_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@map("chat_messages")
 }
