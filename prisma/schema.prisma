@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum GroupRole {
+  OWNER
+  MEMBER
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model User {
+  id              String       @id @default(uuid()) @db.Uuid
+  email           String       @unique @db.VarChar(320)
+  passwordHash    String?      @map("password_hash")
+  name            String       @db.VarChar(120)
+  handle          String       @unique @db.VarChar(64)
+  avatarBg        String       @default("#E8F5F3") @map("avatar_bg") @db.VarChar(16)
+  avatarColor     String       @default("#0D9488") @map("avatar_color") @db.VarChar(16)
+  emailVerifiedAt DateTime?    @map("email_verified_at")
+  authProvider    AuthProvider @default(EMAIL) @map("auth_provider")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+
+  refreshTokens           RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  oauthAccounts           OAuthAccount[]
+  ownedGroups             Group[]                  @relation("GroupOwner")
+  groupMemberships        GroupMember[]
+  sentInvites             GroupInvite[]            @relation("InviteSender")
+  receivedInvites         GroupInvite[]            @relation("InviteRecipient")
+  sharingSessions         SharingSession[]
+  sessionVisibility       SessionVisibility[]
+
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model OAuthAccount {
+  id         String       @id @default(uuid()) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  provider   AuthProvider
+  providerId String       @map("provider_id") @db.VarChar(255)
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Group {
+  id                 String    @id @default(uuid()) @db.Uuid
+  name               String    @db.VarChar(120)
+  emoji              String    @db.VarChar(8)
+  inviteCode         String    @unique @map("invite_code") @db.VarChar(16)
+  inviteCodeExpiresAt DateTime @map("invite_code_expires_at")
+  ownerId            String    @map("owner_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  owner           User             @relation("GroupOwner", fields: [ownerId], references: [id])
+  members         GroupMember[]
+  invites         GroupInvite[]
+  activities      GroupActivity[]
+  sharingSessions SharingSession[]
+
+  @@index([ownerId])
+  @@index([deletedAt])
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String    @id @default(uuid()) @db.Uuid
+  groupId  String    @map("group_id") @db.Uuid
+  userId   String    @map("user_id") @db.Uuid
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now()) @map("joined_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupInvite {
+  id        String       @id @default(uuid()) @db.Uuid
+  groupId   String       @map("group_id") @db.Uuid
+  inviterId String       @map("inviter_id") @db.Uuid
+  inviteeId String?      @map("invitee_id") @db.Uuid
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime     @map("expires_at")
+  createdAt DateTime     @default(now()) @map("created_at")
+  respondedAt DateTime?  @map("responded_at")
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User  @relation("InviteSender", fields: [inviterId], references: [id])
+  invitee User? @relation("InviteRecipient", fields: [inviteeId], references: [id])
+
+  @@index([inviteeId, status])
+  @@index([groupId])
+  @@map("group_invites")
+}
+
+model GroupActivity {
+  id        String   @id @default(uuid()) @db.Uuid
+  groupId   String   @map("group_id") @db.Uuid
+  message   String   @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@map("group_activities")
+}
+
+model SharingSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  groupId    String    @map("group_id") @db.Uuid
+  durationId String    @map("duration_id") @db.VarChar(8)
+  startedAt  DateTime  @default(now()) @map("started_at")
+  endsAt     DateTime  @map("ends_at")
+  stoppedAt  DateTime? @map("stopped_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group        Group               @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  locations    LocationUpdate[]
+  visibility   SessionVisibility[]
+
+  @@index([userId, stoppedAt])
+  @@index([groupId, stoppedAt])
+  @@index([endsAt])
+  @@map("sharing_sessions")
+}
+
+model SessionVisibility {
+  id             String  @id @default(uuid()) @db.Uuid
+  sessionId      String  @map("session_id") @db.Uuid
+  targetUserId   String  @map("target_user_id") @db.Uuid
+  canSeeMe       Boolean @default(true) @map("can_see_me")
+
+  session    SharingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  targetUser User           @relation(fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, targetUserId])
+  @@map("session_visibility")
+}
+
+model LocationUpdate {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  latitude  Float
+  longitude Float
+  label     String?  @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session SharingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("location_updates")
+}
